@@ -1,0 +1,18 @@
+{
+  "name": "rtc",
+  "repo": "publicclass/rtc",
+  "description": "A WebRTC component.",
+  "version": "0.0.1",
+  "keywords": [],
+  "dependencies": {
+    "component/emitter": "*",
+    "visionmedia/debug": "*"
+  },
+  "development": {},
+  "license": "MIT",
+  "scripts": [
+    "index.js",
+    "signal/app-channel.js",
+    "signal/web-socket.js"
+  ]
+}

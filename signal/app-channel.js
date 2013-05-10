@@ -69,8 +69,6 @@ function AppChannel(opts){
       retryTimeout = opts.retryTimeout;
       retryAttempts = 0;
 
-      debug('onmessage',m)
-
       if( m.data == 'connected' ){
         if( !connected ){
           connected = true;

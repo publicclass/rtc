@@ -9,7 +9,8 @@
   "dependencies": {},
   "devDependencies": {
     "ws": "0.4.25",
-    "component": "~0.15.1"
+    "component": "~0.15.1",
+    "node-static": "~0.6.9"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

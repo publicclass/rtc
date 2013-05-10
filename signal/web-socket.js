@@ -55,6 +55,11 @@ function WebSocketSignal(opts){
       } else if( json && json.type == 'close' ){
         debug('close')
         signal.emit('close');
+        if( connected === true ){
+          connected = false;
+          debug('disconnected')
+          signal.emit('disconnected') // from peer
+        }
 
       } else if( json && json.candidate ){
         debug('candidate',[json])
@@ -73,6 +78,10 @@ function WebSocketSignal(opts){
           debug('disconnected')
           signal.emit('disconnected') // from peer
         }
+
+      } else if( json && json.challenge ){
+        debug('challenge',[json])
+        signal.emit('challenge',json)
 
       } else if( json ){
         debug('message',m.data)
@@ -121,10 +130,11 @@ function WebSocketSignal(opts){
     signal.send = function(msg){
       debug('send',msg)
       if( ws.readyState == ws.OPEN ){
-        if( typeof msg == 'string' )
+        if( typeof msg == 'string' ){
           msg = JSON.stringify({type:msg});
-        else
+        } else {
           msg = JSON.stringify(msg)
+        }
         ws.send(msg)
       } else {
         console.error('attempted to send a message too early, waiting for open')

@@ -1,5 +1,3 @@
-// based on https://github.com/webRTC/webrtc.io-client
-
 var Emitter = require('emitter')
   , WebSocketSignal = require('./signal/web-socket')
   , AppChannelSignal = require('./signal/app-channel')
@@ -21,7 +19,7 @@ exports.available = (function(){
       && typeof PeerConnection.prototype.createDataChannel == 'function' ){
     try {
       var pc = new PeerConnection(null,{optional: [{RtpDataChannels: true}]});
-      pc.createDataChannel('feat',{reliable:false})
+      pc.createDataChannel('feat',{reliable:false}).close()
       return true;
     } catch(e){
       return false;
@@ -35,12 +33,17 @@ exports.connect = function(opts){
   opts = opts || {};
   opts.dataChannels = opts.dataChannels || false;
   opts.connectionTimeout = opts.connectionTimeout || 30000;
+  opts.turnConfigURL = opts.turnConfigURL || '';
 
   var rtc = Emitter({})
     , channels = rtc.channels = {}
     , connection
     , signal
-    , timeout;
+    , timeout
+    , challenge = Date.now() + Math.random()
+    , challenged = false
+    , streams = []
+    , open = false;
 
   // default to appchannel signal
   if( opts.signal == 'ws' ){
@@ -49,38 +52,16 @@ exports.connect = function(opts){
     signal = rtc.signal = new AppChannelSignal(opts)
   }
 
-  // Get TURN server configuration:
-  (function() {
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState == 4 && xhr.status == 200) {
-        try {
-          data = JSON.parse(xhr.responseText);
-        } catch(e) {
-          // some error. use defaults.
-          debug.connection('got bad data from turn ajax service.');
-          return
-        }
-        if (data.uris && data.uris[0] && data.username && data.password) {
-          exports.servers.iceServers.push({
-            url: data.uris[0].replace(':', ':' + data.username + '@'),
-            credential: data.password
-          });
-          if (connection) { // Reinit connection if it has been inited already.
-            connection = createConnection();
-            createDataChannels();
-          }
-        }
-      }
-    };
-    xhr.open('GET', 'http://computeengineondemand.appspot.com/turn?username=apa&key=1329412323', true);
-    xhr.send();
-  })();
+  // request optional turn configuration
+  if( opts.turnConfigURL ){
+    requestTURNConfiguration(opts.turnConfigURL,rtc);
+  }
 
   signal.on('open',function(){
     if( connection ) rtc.close()
     connection = createConnection();
     createDataChannels();
+    addMissingStreams(connection);
   })
   signal.on('offer',function(desc){
     connection.setRemoteDescription(rewriteSDP(desc));
@@ -101,13 +82,40 @@ exports.connect = function(opts){
       }
     }
   })
+  signal.on('challenge',function(e){
+    console.log('received challenge',challenge,e.challenge)
+    challenged = true;
+
+    // the one with the lowest challenge
+    // (and thus the first one to arrive)
+    // is the initiator.
+    // and the initiator will "start" the
+    // rtc connection by sending the initial
+    // offer. the rest of the handshake will
+    // be dealt with by the library.
+    if( e.challenge > challenge ){
+      console.log('initiator!')
+      rtc.initiator = true;
+      sendOffer();
+    } else {
+      rtc.initiator = false;
+    }
+  })
   signal.on('connected',function(){
-    // A peer has arrived
+    debug.connection('signal connected')
+
+    // instead of letting a server decide
+    // which peer should send the initial
+    // offer (aka "initiator") we request
+    // the peer to send us a challenge
+    signal.send({challenge:challenge})
+
     rtc.emit('connected')
   })
   signal.on('disconnected',function(){
-    // A peer has left
+    debug.connection('signal disconnected')
     rtc.emit('disconnected')
+    rtc.reconnect()
   })
   signal.on('event',function(evt){
     var type = evt.type;
@@ -122,25 +130,21 @@ exports.connect = function(opts){
     debug.connection('create')
 
     // clear any previous timeouts
-    if( connection ){
+    if( rtc.connection ){
       stopTimeout('create');
     }
 
     var config = {optional: [{RtpDataChannels: !!opts.dataChannels}]};
-    var connection = new PeerConnection(exports.servers,config)
+    var connection = new PeerConnection(exports.servers,config);
     connection.onconnecting = function(e){
       debug.connection('connecting',arguments)
       rtc.emit('connecting',e)
-    }
-    connection.onopen = function(e){
-      debug.connection('open',arguments)
-      rtc.emit('open',e)
-      stopTimeout('onopen');
     }
     connection.onclose = function(e){
       debug.connection('close',arguments)
       rtc.emit('close',e)
       stopTimeout('onclose');
+      checkOpen()
     }
     connection.onaddstream = function(e){
       debug.connection('addstream',arguments)
@@ -152,61 +156,84 @@ exports.connect = function(opts){
     }
     connection.ondatachannel = function(e){
       debug.connection('datachannel',arguments)
-      channels[e.channel.label] = setDataChannelListeners(e.channel);
+      channels[e.channel.label] = initDataChannel(e.channel);
       rtc.emit('datachannel',e)
     }
     connection.ongatheringchange = function(e){
       debug.connection('gatheringchange -> %s',connection.iceGatheringState,arguments)
       rtc.emit('gatheringchange',e)
-      if( connection.iceGatheringState == 'complete' ){
-        stopTimeout('ongatheringchange');
-      } else {
-        // timeout if peer connection hasn't been established
-        // in 30s after the last candidate
-        startTimeout('ongatheringchange')
-      }
+      checkOpen()
     }
     connection.onicecandidate = function(e){
-      debug.connection('icecandidate %s',opts.bufferCandidates ? '(buffered)' : '',arguments)
       if( e.candidate ){
+        debug.connection('icecandidate %s',opts.bufferCandidates ? '(buffered)' : '',arguments)
         signal.send(e.candidate)
       } else {
         debug.connection('icecandidate end %s',opts.bufferCandidates ? '(buffered)' : '')
         signal.send({candidate:null})
       }
       rtc.emit('icecandidate',e)
+      checkOpen()
     }
     connection.oniceconnectionstatechange =
     connection.onicechange = function(e){
       debug.connection('icechange -> %s',connection.iceConnectionState,arguments)
       rtc.emit('icechange',e)
-      if( connection.iceConnectionState == 'connected' ){
-        stopTimeout('onicechange');
-      } else if( connection.iceConnectionState != 'closed' ){
-        startTimeout('onicechange')
-      }
+      checkOpen()
     }
     connection.onnegotiationneeded = function(e){
       debug.connection('negotiationneeded',arguments)
       rtc.emit('negotiationneeded',e)
+      open && sendOffer()
     }
     connection.onsignalingstatechange =
     connection.onstatechange = function(e){
       debug.connection('statechange -> %s',connection.signalingState,arguments)
       rtc.emit('statechange',e)
-      if( connection.signalingState == 'stable' ){
-        stopTimeout('onstatechange');
-      }
+      checkOpen()
     }
 
-    return rtc.connection = connection;
+    rtc.connection = connection;
+    return connection;
+  }
+
+  function checkOpen(){
+    var isOpen = connection &&
+      connection.iceConnectionState != 'new' &&
+      connection.signalingState == 'stable' &&
+      connection.iceGatheringState == 'complete' &&
+      challenged;
+
+    // closed -> open
+    if( !open && isOpen ){
+      console.log('CLOSED -> OPEN')
+      stopTimeout('isopen');
+      open = true;
+      rtc.emit('open')
+
+    // closed -> closed
+    } else if( !open && !isOpen ){
+      console.log('CLOSED -> CLOSED')
+      startTimeout('isopen')
+
+    // open -> closed
+    } else if( open && !isOpen ){
+      console.log('OPEN -> CLOSED')
+      open = false;
+      stopTimeout('isopen');
+      rtc.emit('close')
+
+    // open -> open
+    } else {
+      console.log('OPEN -> OPEN')
+    }
   }
 
   function createDataChannels() {
     if( opts.dataChannels ){
-      var labels = typeof opts.dataChannels == 'string'
-        ? [opts.dataChannels]
-        : opts.dataChannels;
+      var labels = typeof opts.dataChannels == 'string' ?
+        [opts.dataChannels] :
+         opts.dataChannels;
       for(var i=0; i<labels.length; i++){
         var label = labels[i];
         channels[label] = createDataChannel(label);
@@ -227,43 +254,101 @@ exports.connect = function(opts){
             'You need Chrome M25 or later with --enable-data-channels flag');
       console.error('Create Data channel failed with exception: ' + e.message);
     }
-    return setDataChannelListeners(channel);
+    return initDataChannel(channel);
+  }
+
+  function addMissingStreams(connection){
+    // re-add any missing streams
+    // [stream,constraints...]
+    var added = false;
+    for(var i=0; i<streams.length; i+=2){
+      var stream = streams[i];
+      if( !getStreamById(connection,stream.id) ){
+        debug.connection('re-added missing stream',stream.id)
+        connection.addStream(stream);
+        added = true;
+      }
+    }
+    added && sendOffer()
+  }
+
+  function getStreamById(connection,id){
+    if( typeof connection.getStreamById == 'function' ){
+      return connection.getStreamById(id);
+    } else {
+      var streams = connection.localStreams || connection.getLocalStreams();
+      console.log('getStreamById fallback',streams)
+      for(var i=0; i<streams.length; i++){
+        if( streams[i].id === id ){
+          return streams[i];
+        }
+      }
+      return null;
+    }
   }
 
   function closeDataChannel(label){
     var channel = channels[label];
-    if( channel.readyState != 'closed' )
-      channel.close();
-    channel.onmessage = null;
-    channel.onopen = null;
-    channel.onclose = null;
-    channel.onerror = null;
-    delete channels[label];
+    if( channel ){
+      if( channel.readyState != 'closed' ){
+        channel.close();
+      }
+      channel.onmessage = null;
+      channel.onopen = null;
+      channel.onclose = null;
+      channel.onerror = null;
+      delete channels[label];
+    }
   }
 
-  function setDataChannelListeners(channel){
+  function closeConnection(){
+    if( connection ){
+      stopTimeout('close')
+      if( connection.signalingState != 'closed' ){
+        connection.close()
+      }
+      connection.onconnecting = null;
+      connection.onopen = null;
+      connection.onclose = null;
+      connection.onaddstream = null;
+      connection.onremovestream = null;
+      connection.ondatachannel = null;
+      connection.ongatheringchange = null;
+      connection.onicecandidate = null;
+      connection.onicechange = null;
+      connection.onidentityresult = null;
+      connection.onnegotiationneeded = null;
+      connection.oniceconnectionstatechange = null;
+      connection.onsignalingstatechange = null;
+      connection.onstatechange = null;
+      connection = null;
+    }
+    rtc.connection = null;
+  }
+
+  function initDataChannel(channel){
     if( channel ){
       debug.channel('adding listeners',channel.label)
       channel.onmessage = function(e){
         debug.channel('message %s',channel.label,e)
-        rtc.emit('channel message',e)
         rtc.emit('channel '+channel.label+' message',e)
+        rtc.emit('channel message',e)
       }
       channel.onopen = function(e){
         debug.channel('open %s',channel.label)
-        rtc.emit('channel open',e)
         rtc.emit('channel '+channel.label+' open',e)
+        rtc.emit('channel open',e)
       }
       channel.onclose = function(e){
         debug.channel('close %s',channel.label)
-        rtc.emit('channel close',e)
         rtc.emit('channel '+channel.label+' close',e)
+        rtc.emit('channel close',e)
       }
       channel.onerror = function(e){
         debug.channel('error %s',channel.label,e)
-        rtc.emit('error',e)
-        rtc.emit('channel error',e)
         rtc.emit('channel '+channel.label+' error',e)
+        rtc.emit('channel error',e)
+        rtc.emit('error',e)
       }
     }
     return channel;
@@ -273,9 +358,7 @@ exports.connect = function(opts){
     debug.connection('timeout started',from)
     clearTimeout(timeout);
     timeout = setTimeout(function(){
-      var err = new Error('connection timed out after all candidates has been sent');
-      err.code = 408;
-      rtc.emit('error',err);
+      rtc.emit('timeout');
     },opts.connectionTimeout)
   }
 
@@ -293,7 +376,9 @@ exports.connect = function(opts){
   }
 
   var onDescError = function(src){
-    return function(err){ console.warn('could not set %s description',src,err) }
+    return function(err){
+      console.warn('could not set %s description',src,err)
+    }
   }
 
   var onLocalDescriptionAndSend = function(desc){
@@ -302,9 +387,20 @@ exports.connect = function(opts){
     signal.send(desc)
   }
 
-  rtc.addStream = function(stream){
+  rtc.addStream = function(stream,constraints){
     debug.connection('adding local stream')
-    connection.addStream(stream);
+    try {
+      connection && connection.addStream(stream,constraints);
+      streams.push(stream,constraints);
+    } catch(e){}
+    return this;
+  }
+
+  rtc.removeStream = function(stream){
+    debug.connection('removing local stream')
+    var i = streams.indexOf(stream);
+    ~i && streams.splice(i,2);
+    connection && connection.removeStream(stream);
     return this;
   }
 
@@ -313,36 +409,17 @@ exports.connect = function(opts){
     if( connection ) rtc.close(true)
     connection = createConnection();
     createDataChannels();
+    addMissingStreams(connection);
     return this;
   }
 
   rtc.close = function(keepSignal){
     debug.connection('close')
-
     var labels = Object.keys(channels);
     labels.forEach(closeDataChannel)
-
-    if( connection ){
-      stopTimeout('close')
-      if( connection.readyState != 'closed' )
-        connection.close()
-      connection.onconnecting = null;
-      connection.onopen = null;
-      connection.onclose = null;
-      connection.onaddstream = null;
-      connection.onremovestream = null;
-      connection.ondatachannel = null;
-      connection.ongatheringchange = null;
-      connection.onicecandidate = null;
-      connection.onicechange = null;
-      connection.onidentityresult = null;
-      connection.onnegotiationneeded = null;
-      connection.oniceconnectionstatechange = null;
-      connection.onsignalingstatechange = null;
-      connection.onstatechange = null;
-      connection = null;
-      rtc.connection = null;
-    }
+    closeConnection()
+    challenged = false;
+    checkOpen()
     keepSignal || signal.send('close')
   }
 
@@ -373,4 +450,30 @@ function rewriteSDP(desc){
   // adjust the bandwidth to 64kbps instead of default 30kbps
   desc.sdp = desc.sdp.replace('b=AS:30','b=AS:64')
   return desc;
+}
+
+// 'http://computeengineondemand.appspot.com/turn?username=apa&key=1329412323'
+function requestTURNConfiguration(url,rtc){
+  var xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = function(){
+    if( xhr.readyState == 4 && xhr.status == 200 ){
+      var data;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch(e) {
+        return debug.connection('got bad data from turn ajax service.',xhr.responseText);
+      }
+      if( data.uris && data.uris[0] && data.username && data.password ){
+        exports.servers.iceServers.push({
+          url: data.uris[0].replace(':', ':' + data.username + '@'),
+          credential: data.password
+        })
+
+        // attempt a reconnect using the new configuration
+        rtc && rtc.reconnect()
+      }
+    }
+  }
+  xhr.open('GET', url, true);
+  xhr.send();
 }

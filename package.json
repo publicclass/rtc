@@ -1,0 +1,23 @@
+{
+  "name": "rtc",
+  "version": "0.0.0",
+  "description": "A WebRTC component.",
+  "main": "index.js",
+  "directories": {
+    "example": "example"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "ws": "0.4.25",
+    "component": "~0.15.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/publicclass/rtc.git"
+  },
+  "author": "Robert Sköld <robert@publicclass.se>",
+  "license": "MIT"
+}

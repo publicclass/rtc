@@ -11,7 +11,7 @@
     <p id='info'></p>
     <script src='../build/build.js'></script>
     <script>
-      require('visionmedia-debug').enable('rtc:connection')
+      require('visionmedia-debug').enable('rtc:signal:*')
 
       var localVideo = document.getElementById('local-video');
       var remoteVideo = document.getElementById('remote-video');
@@ -72,7 +72,7 @@
           console.log('CHANNEL CLOSED')
         })
         remote.on('error',function(e){
-          console.error(e)
+          console.error('ERROR',e.message)
         })
 
         // 1. request the webcam

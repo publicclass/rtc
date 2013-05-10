@@ -43,7 +43,7 @@ exports.connect = function(opts){
     , challenge = Date.now() + Math.random()
     , challenged = false
     , streams = []
-    , open = false;
+    , open = rtc.open = false;
 
   // default to appchannel signal
   if( opts.signal == 'ws' ){
@@ -198,17 +198,16 @@ exports.connect = function(opts){
   }
 
   function checkOpen(){
-    var isOpen = connection &&
-      connection.iceConnectionState != 'new' &&
+    var isOpen = connection && challenged &&
       connection.signalingState == 'stable' &&
-      connection.iceGatheringState == 'complete' &&
-      challenged;
+      (connection.iceConnectionState == 'connected' ||
+        connection.iceGatheringState == 'complete');
 
     // closed -> open
     if( !open && isOpen ){
       console.log('CLOSED -> OPEN')
       stopTimeout('isopen');
-      open = true;
+      rtc.open = open = true;
       rtc.emit('open')
 
     // closed -> closed
@@ -219,7 +218,7 @@ exports.connect = function(opts){
     // open -> closed
     } else if( open && !isOpen ){
       console.log('OPEN -> CLOSED')
-      open = false;
+      rtc.open = open = false;
       stopTimeout('isopen');
       rtc.emit('close')
 

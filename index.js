@@ -41,7 +41,8 @@ exports.connect = function(opts){
     , signal
     , timeout
     , challenge = Date.now() + Math.random()
-    , challenged = false
+    , challenged = rtc.challenged = false
+    , challenger = rtc.challenger = false
     , streams = []
     , open = rtc.open = false;
 
@@ -71,20 +72,31 @@ exports.connect = function(opts){
     connection.setRemoteDescription(rewriteSDP(desc));
   })
   signal.on('candidate',function(candidate){
-    if (!connection.remoteDescription) {
-      console.warn('ICE candidate: too soon?')
-    } else {
-      try {
-        debug.connection('signal icecandidate',arguments)
-        connection.addIceCandidate(candidate);
-      } catch(e){
-        console.warn('ICE candidate: too soon?',e)
-      }
+    try {
+      debug.connection('signal icecandidate',arguments)
+      connection.addIceCandidate(candidate);
+    } catch(e){
+      console.log('signalingState',connection.signalingState)
+      console.log('iceConnectionState',connection.iceConnectionState)
+      console.log('iceGatheringState',connection.iceGatheringState)
+      console.warn('ICE candidate: too soon?',e)
     }
   })
   signal.on('challenge',function(e){
-    console.log('received challenge',challenge,e.challenge)
-    challenged = true;
+    // a request-for-challenge
+    if( e.challenge === null ){
+      debug.connection('request-for-challenge',challenge)
+      signal.send({challenge:challenge})
+      rtc.challenger = challenger = true;
+      return;
+    }
+
+    // in case a challenge was received without
+    // having sent one we send it now.
+    if( !challenger ){
+      signal.send({challenge:challenge});
+      rtc.challenger = challenger = true;
+    }
 
     // the one with the lowest challenge
     // (and thus the first one to arrive)
@@ -93,13 +105,17 @@ exports.connect = function(opts){
     // rtc connection by sending the initial
     // offer. the rest of the handshake will
     // be dealt with by the library.
+    debug.connection('challenge',challenge,e.challenge)
     if( e.challenge > challenge ){
-      console.log('initiator!')
       rtc.initiator = true;
       sendOffer();
     } else {
       rtc.initiator = false;
     }
+
+    // mark this connection as challenged
+    // (a requirement to be considered "open")
+    rtc.challenged = challenged = true;
   })
   signal.on('connected',function(){
     debug.connection('signal connected')
@@ -108,7 +124,7 @@ exports.connect = function(opts){
     // which peer should send the initial
     // offer (aka "initiator") we request
     // the peer to send us a challenge
-    signal.send({challenge:challenge})
+    signal.send({challenge:null})
 
     rtc.emit('connected')
   })
@@ -417,7 +433,8 @@ exports.connect = function(opts){
     var labels = Object.keys(channels);
     labels.forEach(closeDataChannel)
     closeConnection()
-    challenged = false;
+    rtc.challenged = challenged = false;
+    rtc.challenger = challenger = false;
     checkOpen()
     keepSignal || signal.send('close')
   }

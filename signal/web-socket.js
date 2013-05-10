@@ -80,7 +80,7 @@ function WebSocketSignal(opts){
           signal.emit('disconnected') // from peer
         }
 
-      } else if( json && json.challenge ){
+      } else if( json && 'challenge' in json ){
         debug('challenge',[json])
         signal.emit('challenge',json)
 

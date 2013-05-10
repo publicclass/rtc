@@ -22,12 +22,15 @@ function AppChannel(opts){
   var signal = Emitter({});
 
   // token is required and will be empty
-  // when room is full
-  if( !opts.token )
+  // when quota is full (see error log on server)
+  if( !opts.token ){
     return signal;
+  }
 
-  if( typeof goog == 'undefined' )
+  // for when the app channel api failed to load
+  if( typeof goog == 'undefined' ){
     return signal;
+  }
 
   var channel = new goog.appengine.Channel(opts.token)
 
@@ -36,8 +39,9 @@ function AppChannel(opts){
 
     retryTimeout *= 2;
     retryAttempts++;
-    if( retryAttempts >= opts.maxAttempts )
-      return console.error('tried to connect to %s %s times without success. giving up.',opts.url,retryAttempts)
+    if( retryAttempts >= opts.maxAttempts ){
+      return signal.emit('error',new Error('unable to connect to signal: '+opts.token))
+    }
 
     var socket = channel.open()
       , connected = null
@@ -48,7 +52,10 @@ function AppChannel(opts){
       debug('open')
       opened = true;
 
-      // Make sure server knows we connected. (Work-around for unreliable (and sometimes totally non-functioning) presence service @ google appengine.)
+      // Make sure server knows we connected.
+      // (a workaround for unreliable, and sometimes
+      // totally non-functioning, presence service
+      // in google appengine)
       var req = new XMLHttpRequest()
       req.open('POST', '/connect?from='+opts.user+'-'+opts.room, false)
       req.send()
@@ -58,10 +65,11 @@ function AppChannel(opts){
     }
 
     socket.onmessage = function(m){
-
       // reset retry timeout on first message
       retryTimeout = opts.retryTimeout;
       retryAttempts = 0;
+
+      debug('onmessage',m)
 
       if( m.data == 'connected' ){
         if( !connected ){
@@ -77,6 +85,11 @@ function AppChannel(opts){
           signal.emit('disconnected') // from peer
         }
 
+      } else if( m.data == 'full' ){
+        debug('full')
+        signal.emit('full')
+        close()
+
       } else {
         var json = JSON.parse(m.data);
         if( json && json.type == 'offer' ){
@@ -90,15 +103,23 @@ function AppChannel(opts){
         } else if( json && json.type == 'close' ){
           close()
 
+        } else if( json && 'challenge' in json ){
+          debug('challenge',[json])
+          signal.emit('challenge',json)
+
         } else if( json && json.candidates ){
           debug('candidates',[json])
-          for( var i=0; i<json.candidates.length; i++ ){
-            signal.emit('candidate',new RTCIceCandidate(json.candidates[i]))
+          if( connected === true ){
+            for( var i=0; i<json.candidates.length; i++ ){
+              signal.emit('candidate',new RTCIceCandidate(json.candidates[i]))
+            }
           }
 
         } else if( json && json.candidate ){
           debug('candidate',[json])
-          signal.emit('candidate',new RTCIceCandidate(json))
+          if( connected === true ){
+            signal.emit('candidate',new RTCIceCandidate(json))
+          }
 
         } else if( json ){
           debug('message',m.data)
@@ -111,21 +132,6 @@ function AppChannel(opts){
       }
     }
 
-    function close(){
-      debug('close')
-
-      clearTimeout(socket.timeout)
-      socket.close(); // will this throw?
-      signal.emit('close')
-
-      // re-connect if were connected
-      if( connected ){
-        connected = false;
-        signal.emit('disconnected')
-        socket.timeout = setTimeout(create,retryTimeout)
-      }
-    }
-
     socket.onerror = function(e){
       console.error('Socket error: ',e)
       signal.emit('error', e)
@@ -133,23 +139,13 @@ function AppChannel(opts){
     }
 
     socket.onclose = function(){
-      // if we weren't connected the room is most likely
-      // full. in which case we let rtc know...
-      if( !connected ){
-        debug('closed (probably full)')
-        signal.emit('event',{type:'full'})
-
-      // if not it's probably a network error and
-      // we should retry a few times.
-      } else {
-        // TODO emit "close" only after a few attempts
-        //      and possible "reconnected" if retries
-        //      work...
-        debug('closed (retrying in %sms)',retryTimeout)
-        signal.emit('close')
-        clearTimeout(socket.timeout)
-        socket.timeout = setTimeout(create,retryTimeout)
-      }
+      // TODO emit "close" only after a few attempts
+      //      and possible "reconnected" if retries
+      //      work...
+      debug('closed (retrying in %sms)',retryTimeout)
+      signal.emit('close')
+      clearTimeout(socket.timeout)
+      socket.timeout = setTimeout(create,retryTimeout)
     }
 
     clearTimeout(socket.timeout)
@@ -193,10 +189,32 @@ function AppChannel(opts){
     }
 
     // ensure the room is disconnect on leave
+    var _before = window.onbeforeunload;
     window.onbeforeunload = function() {
       var req = new XMLHttpRequest()
       req.open('POST', '/disconnect?from='+opts.user+'-'+opts.room, false)
       req.send()
+
+      // chain in case there's other listeners
+      if( typeof _before == 'function' ){
+        _before.apply(window,arguments);
+      }
+    }
+
+
+    function close(){
+      debug('close')
+
+      clearTimeout(socket.timeout)
+      socket.close(); // will this throw?
+      signal.emit('close')
+
+      // re-connect if were connected
+      if( connected ){
+        connected = false;
+        signal.emit('disconnected')
+        socket.timeout = setTimeout(create,retryTimeout)
+      }
     }
 
     return signal;

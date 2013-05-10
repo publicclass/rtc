@@ -31,6 +31,11 @@ TODO
 
 #### Events
 
+- `connected` is emitted when two peers are connected to the same room.
+- `disconnected` is emitted when one peer has left the room.
+- `open` is emitted
+- `full`
+
 ### Signal#send(msg)
 
 #### Events

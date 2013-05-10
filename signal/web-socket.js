@@ -26,8 +26,9 @@ function WebSocketSignal(opts){
 
     retryTimeout *= 2;
     retryAttempts++;
-    if( retryAttempts >= opts.maxAttempts )
-      return console.error('tried to connect to %s %s times without success. giving up.',opts.url,retryAttempts)
+    if( retryAttempts >= opts.maxAttempts ){
+      return signal.emit('error',new Error('unable to connect to signal: '+opts.url))
+    }
 
     var ws = new WebSocket(opts.url)
       , connected = null;
@@ -97,22 +98,20 @@ function WebSocketSignal(opts){
       console.error('WS error: ',e)
       clearTimeout(ws.timeout)
       signal.emit('close')
-      signal.emit('error', e)
+      signal.emit('error',e)
     }
 
-    ws.onclose = function(){
-      // if we weren't connected the room is most likely
-      // full. in which case we let rtc know...
-      if( !connected ){
-        debug('closed (probably full)')
+    ws.onclose = function(e){
+      // if we weren't connected and the socket
+      // was closed normally (code 1000) then the
+      // room is most likely full.
+      if( e.code === 1000 && connected === null ){
+        debug('closed (probably full)',e.code)
         signal.emit('event',{type:'full'})
 
       // if not it's probably a network error and
       // we should retry a few times.
       } else {
-        // TODO emit "close" only after a few attempts
-        //      and possible "reconnected" if retries
-        //      work...
         debug('closed (retrying in %sms)',retryTimeout)
         signal.emit('close')
         clearTimeout(ws.timeout)
@@ -137,7 +136,7 @@ function WebSocketSignal(opts){
         }
         ws.send(msg)
       } else {
-        console.error('attempted to send a message too early, waiting for open')
+        console.warn('attempted to send a message too early, waiting for open')
         signal.on('open',signal.send.bind(signal,msg))
       }
     }

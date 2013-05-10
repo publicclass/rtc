@@ -17,7 +17,9 @@ TODO
 
 ### rtc.connect([opts]) => Rtc
 
-### Rtc#addStream(stream)
+### Rtc#addStream(stream,constraints)
+
+### Rtc#removeStream(stream)
 
 ### Rtc#start()
 

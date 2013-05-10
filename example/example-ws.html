@@ -8,10 +8,10 @@
     <button id='toggle-video' onclick='toggleVideo()'>Add Video</button>
     <video id='local-video' width='320' height='240' autoplay muted></video>
     <video id='remote-video' width='320' height='240' autoplay></video>
-    <p id='info'></p>
-    <script src='../build/build.js'></script>
+    <pre id='info'></p>
+    <script src='build.js'></script>
     <script>
-      require('visionmedia-debug').enable('rtc:signal:*')
+      require('visionmedia-debug').enable('rtc:connection')
 
       var localVideo = document.getElementById('local-video');
       var remoteVideo = document.getElementById('remote-video');
@@ -120,7 +120,10 @@
               'ice: '+remote.connection.iceConnectionState,
               'gathering: '+remote.connection.iceGatheringState,
               'signal: '+remote.connection.signalingState,
-              'initiator: '+remote.initiator
+              'initiator: '+remote.initiator,
+              'open: '+remote.open,
+              'challenged: '+remote.challenged,
+              'challenger: '+remote.challenger
             ].join('\n\t')
           }
 

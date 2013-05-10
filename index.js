@@ -458,6 +458,20 @@ exports.connect = function(opts){
     sendOffer()
   }
 
+  // ensure we close properly before
+  // unload. (hoping this will lessen
+  // the "Aw snap" errors)
+  var _before = window.onbeforeunload;
+  window.onbeforeunload = function() {
+    stopTimeout('unload');
+    rtc.close();
+
+    // chain in case there's other listeners
+    if( typeof _before == 'function' ){
+      _before.apply(window,arguments);
+    }
+  }
+
   return rtc;
 }
 

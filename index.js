@@ -65,13 +65,21 @@ exports.connect = function(opts){
     addMissingStreams(connection);
   })
   signal.on('offer',function(desc){
+    if( !connection ) return;
     connection.setRemoteDescription(rewriteSDP(desc));
     connection.createAnswer(onLocalDescriptionAndSend);
   })
   signal.on('answer',function(desc){
+    if( !connection ) return;
     connection.setRemoteDescription(rewriteSDP(desc));
   })
   signal.on('candidate',function(candidate){
+    if( !connection ) return;
+
+    // skip while disconnected
+    if( connection.iceConnectionState == 'disconnected' ){
+      return;
+    }
     try {
       debug.connection('signal icecandidate',arguments)
       connection.addIceCandidate(candidate);
@@ -221,26 +229,26 @@ exports.connect = function(opts){
 
     // closed -> open
     if( !open && isOpen ){
-      console.log('CLOSED -> OPEN')
+      debug.connection('CLOSED -> OPEN')
       stopTimeout('isopen');
       rtc.open = open = true;
       rtc.emit('open')
 
     // closed -> closed
     } else if( !open && !isOpen ){
-      console.log('CLOSED -> CLOSED')
+      debug.connection('CLOSED -> CLOSED')
       startTimeout('isopen')
 
     // open -> closed
     } else if( open && !isOpen ){
-      console.log('OPEN -> CLOSED')
+      debug.connection('OPEN -> CLOSED')
       rtc.open = open = false;
       stopTimeout('isopen');
       rtc.emit('close')
 
     // open -> open
     } else {
-      console.log('OPEN -> OPEN')
+      debug.connection('OPEN -> OPEN')
     }
   }
 
@@ -292,7 +300,6 @@ exports.connect = function(opts){
       return connection.getStreamById(id);
     } else {
       var streams = connection.localStreams || connection.getLocalStreams();
-      console.log('getStreamById fallback',streams)
       for(var i=0; i<streams.length; i++){
         if( streams[i].id === id ){
           return streams[i];

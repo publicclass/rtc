@@ -62,6 +62,12 @@ function WebSocketSignal(opts){
           signal.emit('disconnected') // from peer
         }
 
+      } else if( json && json.candidates ){
+        debug('candidates',[json])
+        for( var i=0; i<json.candidates.length; i++ ){
+          signal.emit('candidate',new RTCIceCandidate(json.candidates[i]))
+        }
+
       } else if( json && json.candidate ){
         debug('candidate',[json])
         signal.emit('candidate',new RTCIceCandidate(json))

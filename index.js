@@ -387,8 +387,10 @@ exports.connect = function(opts){
   }
 
   var sendOffer = function(){
-    debug.connection('send offer')
-    connection.createOffer(onLocalDescriptionAndSend);
+    if( connection ){
+      debug.connection('send offer')
+      connection.createOffer(onLocalDescriptionAndSend);
+    }
   }
 
   var onDescError = function(src){

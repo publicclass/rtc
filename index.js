@@ -119,6 +119,8 @@ exports.connect = function(opts){
     // mark this connection as challenged
     // (a requirement to be considered "open")
     rtc.challenged = challenged = true;
+
+    rtc.emit('connected')
   })
   signal.on('connected',function(){
     debug.connection('signal connected')
@@ -128,8 +130,6 @@ exports.connect = function(opts){
     // offer (aka "initiator") we request
     // the peer to send us a challenge
     signal.send({challenge:null})
-
-    rtc.emit('connected')
   })
   signal.on('disconnected',function(){
     debug.connection('signal disconnected')

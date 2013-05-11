@@ -11,7 +11,7 @@
     <pre id='info'></p>
     <script src='public/build.js'></script>
     <script>
-      require('visionmedia-debug').enable('rtc:connection')
+      require('visionmedia-debug').enable('rtc:*')
 
       var localVideo = document.getElementById('local-video');
       var remoteVideo = document.getElementById('remote-video');
@@ -28,9 +28,9 @@
 
         var remote = rtc.connect({
           signal:'ws',
-          url: 'ws://192.168.0.132:8090/test',
+          url: 'ws://bob.publicclass.org:8090/test',
           connectionTimeout: 5000,
-          dataChannels: ['hi']
+          dataChannels: 'hi'
         });
 
         remote.on('addstream',function(e){
@@ -56,7 +56,7 @@
           console.log('FULL')
         })
         remote.on('connected',function(){
-          console.log('CONNECTED\n')
+          console.log('\nCONNECTED')
         })
         remote.on('disconnected',function(){
           console.log('DISCONNECTED\n')

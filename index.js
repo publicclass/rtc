@@ -53,11 +53,6 @@ exports.connect = function(opts){
     signal = rtc.signal = new AppChannelSignal(opts)
   }
 
-  // request optional turn configuration
-  if( opts.turnConfigURL ){
-    requestTURNConfiguration(opts.turnConfigURL,rtc);
-  }
-
   signal.on('open',function(){
     if( connection ) rtc.close()
     connection = createConnection();
@@ -477,6 +472,11 @@ exports.connect = function(opts){
     if( typeof _before == 'function' ){
       _before.apply(window,arguments);
     }
+  }
+
+  // request optional turn configuration
+  if( opts.turnConfigURL ){
+    requestTURNConfiguration(opts.turnConfigURL,rtc);
   }
 
   return rtc;

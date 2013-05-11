@@ -10,6 +10,7 @@
     <video id='remote-video' width='320' height='240' autoplay></video>
     <pre id='info'></p>
     <script src='public/build.js'></script>
+    <script src='/build.js'></script>
     <script>
       require('visionmedia-debug').enable('rtc:*')
 
@@ -28,9 +29,12 @@
 
         var remote = rtc.connect({
           signal:'ws',
-          url: 'ws://bob.publicclass.org:8090/test',
+          url: 'ws://nj.publicclass.co:8090/test',
           connectionTimeout: 5000,
-          dataChannels: 'hi'
+          dataChannels: 'hi',
+
+          // request TURN credentials
+          turnConfigURL: 'https://computeengineondemand.appspot.com/turn?username=apa&key=1329412323'
         });
 
         remote.on('addstream',function(e){

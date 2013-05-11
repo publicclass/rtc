@@ -4,7 +4,7 @@ runtime: go
 api_version: go1
 
 handlers:
-- url: /(.*\.js)
+- url: /(.*\.(js|html))
   static_files: public/\1
   upload: public/.*
 - url: /.*

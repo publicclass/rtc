@@ -149,9 +149,7 @@ exports.connect = function(opts){
     debug.connection('create')
 
     // clear any previous timeouts
-    if( rtc.connection ){
-      stopTimeout('create');
-    }
+    stopTimeout('create');
 
     var config = {optional: [{RtpDataChannels: !!opts.dataChannels}]};
     var connection = new PeerConnection(exports.servers,config);

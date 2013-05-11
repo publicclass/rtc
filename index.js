@@ -217,7 +217,7 @@ exports.connect = function(opts){
   }
 
   function checkOpen(){
-    var isOpen = connection && challenged &&
+    var isOpen = connection && challenged && challenger &&
       connection.signalingState == 'stable' &&
       (connection.iceConnectionState == 'connected' ||
         connection.iceGatheringState == 'complete');

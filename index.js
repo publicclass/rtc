@@ -253,8 +253,7 @@ exports.connect = function(opts){
         [opts.dataChannels] :
          opts.dataChannels;
       for(var i=0; i<labels.length; i++){
-        var label = labels[i];
-        channels[label] = createDataChannel(label);
+        createDataChannel(labels[i]);
       }
     }
   }
@@ -268,11 +267,10 @@ exports.connect = function(opts){
       // You need to start chrome with  --enable-data-channels flag.
       channel = connection.createDataChannel(label,{reliable: false});
     } catch (e) {
-      alert('Failed to create data channel. ' +
-            'You need Chrome M25 or later with --enable-data-channels flag');
       console.error('Create Data channel failed with exception: ' + e.message);
     }
-    return initDataChannel(channel);
+    channels[label] = initDataChannel(channel);
+    return channel;
   }
 
   function addMissingStreams(connection){
@@ -290,6 +288,7 @@ exports.connect = function(opts){
     added && sendOffer()
   }
 
+  // a fallback version of connection.getStreamById
   function getStreamById(connection,id){
     if( typeof connection.getStreamById == 'function' ){
       return connection.getStreamById(id);

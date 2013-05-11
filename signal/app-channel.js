@@ -98,9 +98,6 @@ function AppChannel(opts){
           debug('answer',json)
           signal.emit('answer',new RTCSessionDescription(json))
 
-        } else if( json && json.type == 'close' ){
-          close()
-
         } else if( json && 'challenge' in json ){
           debug('challenge',[json])
           signal.emit('challenge',json)
@@ -141,7 +138,6 @@ function AppChannel(opts){
       //      and possible "reconnected" if retries
       //      work...
       debug('closed (retrying in %sms)',retryTimeout)
-      signal.emit('close')
       clearTimeout(socket.timeout)
       socket.timeout = setTimeout(create,retryTimeout)
     }
@@ -204,7 +200,7 @@ function AppChannel(opts){
       debug('close')
 
       clearTimeout(socket.timeout)
-      socket.close(); // will this throw?
+      // socket.close(); // will this throw?
       signal.emit('close')
 
       // re-connect if were connected

@@ -40,6 +40,7 @@ exports.connect = function(opts){
     , connection
     , signal
     , timeout
+    , awaitingAnswer = false
     , challenge = Date.now() + Math.random()
     , challenged = rtc.challenged = false
     , challenger = rtc.challenger = false
@@ -61,12 +62,15 @@ exports.connect = function(opts){
   })
   signal.on('offer',function(desc){
     if( !connection ) return;
-    connection.setRemoteDescription(rewriteSDP(desc));
-    connection.createAnswer(onLocalDescriptionAndSend);
+    connection.setRemoteDescription(rewriteSDP(desc),function(){
+      connection.createAnswer(onLocalDescriptionAndSend);
+    },onDescError('remote offer'));
   })
   signal.on('answer',function(desc){
     if( !connection ) return;
-    connection.setRemoteDescription(rewriteSDP(desc));
+    connection.setRemoteDescription(rewriteSDP(desc),function(){
+      awaitingAnswer = false;
+    },onDescError('remote answer'));
   })
   signal.on('candidate',function(candidate){
     if( !connection ) return;
@@ -386,9 +390,10 @@ exports.connect = function(opts){
   }
 
   var sendOffer = function(){
-    if( connection ){
+    if( connection && !awaitingAnswer ){
       debug.connection('send offer')
       connection.createOffer(onLocalDescriptionAndSend);
+      awaitingAnswer = true;
     }
   }
 
@@ -400,7 +405,7 @@ exports.connect = function(opts){
 
   var onLocalDescriptionAndSend = function(desc){
     debug.connection('local description',desc)
-    connection.setLocalDescription(desc)
+    connection.setLocalDescription(desc,function(){},onDescError('local '+desc.type))
     signal.send(desc)
   }
 
@@ -423,10 +428,13 @@ exports.connect = function(opts){
 
   rtc.reconnect = function(){
     debug.connection('reconnect')
-    if( connection ) rtc.close(true)
+    if( connection ) {
+      rtc.close(true)
+    }
     connection = createConnection();
     createDataChannels();
     addMissingStreams(connection);
+    rtc.emit('reconnect')
     return this;
   }
 
@@ -435,6 +443,7 @@ exports.connect = function(opts){
     var labels = Object.keys(channels);
     labels.forEach(closeDataChannel)
     closeConnection()
+    awaitingAnswer = false;
     rtc.challenged = challenged = false;
     rtc.challenger = challenger = false;
     checkOpen()

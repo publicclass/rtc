@@ -202,7 +202,6 @@ exports.connect = function(opts){
     connection.onnegotiationneeded = function(e){
       debug.connection('negotiationneeded',arguments)
       rtc.emit('negotiationneeded',e)
-      open && sendOffer()
     }
     connection.onsignalingstatechange =
     connection.onstatechange = function(e){

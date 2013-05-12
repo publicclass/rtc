@@ -40,7 +40,6 @@ exports.connect = function(opts){
     , connection
     , signal
     , timeout
-    , awaitingAnswer = false
     , challenge = Date.now() + Math.random()
     , challenged = rtc.challenged = false
     , challenger = rtc.challenger = false
@@ -68,9 +67,7 @@ exports.connect = function(opts){
   })
   signal.on('answer',function(desc){
     if( !connection ) return;
-    connection.setRemoteDescription(rewriteSDP(desc),function(){
-      awaitingAnswer = false;
-    },onDescError('remote answer'));
+    connection.setRemoteDescription(rewriteSDP(desc),function(){},onDescError('remote answer'));
   })
   signal.on('candidate',function(candidate){
     if( !connection ) return;
@@ -390,23 +387,29 @@ exports.connect = function(opts){
   }
 
   var sendOffer = function(){
-    if( connection && !awaitingAnswer ){
+    if( connection ){
       debug.connection('send offer')
       connection.createOffer(onLocalDescriptionAndSend);
-      awaitingAnswer = true;
     }
   }
 
   var onDescError = function(src){
     return function(err){
+      if( connection ){
+        console.log('signalingState',connection.signalingState)
+        console.log('iceConnectionState',connection.iceConnectionState)
+        console.log('iceGatheringState',connection.iceGatheringState)
+      }
       console.warn('could not set %s description',src,err)
     }
   }
 
   var onLocalDescriptionAndSend = function(desc){
     debug.connection('local description',desc)
-    connection.setLocalDescription(desc,function(){},onDescError('local '+desc.type))
-    signal.send(desc)
+    if( connection ){
+      connection.setLocalDescription(desc,function(){},onDescError('local '+desc.type))
+      signal.send(desc)
+    }
   }
 
   rtc.addStream = function(stream,constraints){
@@ -443,7 +446,6 @@ exports.connect = function(opts){
     var labels = Object.keys(channels);
     labels.forEach(closeDataChannel)
     closeConnection()
-    awaitingAnswer = false;
     rtc.challenged = challenged = false;
     rtc.challenger = challenger = false;
     checkOpen()

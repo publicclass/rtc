@@ -511,10 +511,12 @@ function requestTURNConfiguration(url,rtc){
         return debug.connection('got bad data from turn ajax service.',xhr.responseText);
       }
       if( data.uris && data.uris[0] && data.username && data.password ){
-        exports.servers.iceServers.push({
-          url: data.uris[0].replace(':', ':' + data.username + '@'),
-          credential: data.password
-        })
+        for (var i = 0; i < data.uris.length; i++) {
+          exports.servers.iceServers.push({
+            url: data.uris[i].replace(':', ':' + data.username + '@'),
+            credential: data.password
+          })
+        }
 
         // attempt a reconnect using the new configuration
         rtc && rtc.reconnect()

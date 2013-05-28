@@ -184,10 +184,15 @@ function AppChannel(opts){
 
     // ensure the room is disconnect on leave
     var _before = window.onbeforeunload;
-    window.onbeforeunload = function() {
-      var req = new XMLHttpRequest()
-      req.open('POST', '/disconnect?from='+opts.user+'-'+opts.room, false)
-      req.send()
+    window.onbeforeunload = function(){
+      try {
+        var req = new XMLHttpRequest()
+        req.open('POST', '/disconnect?from='+opts.user+'-'+opts.room, false)
+        req.send()
+      } catch(e){
+        // ignored because it should be done from the
+        // backend anyway
+      }
 
       // chain in case there's other listeners
       if( typeof _before == 'function' ){

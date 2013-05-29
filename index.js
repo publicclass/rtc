@@ -43,6 +43,7 @@ exports.connect = function(opts){
     , challenge = Date.now() + Math.random()
     , challenged = rtc.challenged = false
     , challenger = rtc.challenger = false
+    , initiator = rtc.initiator = null
     , streams = []
     , open = rtc.open = false;
 
@@ -111,10 +112,10 @@ exports.connect = function(opts){
     // be dealt with by the library.
     debug.connection('challenge',challenge,e.challenge)
     if( e.challenge > challenge ){
-      rtc.initiator = true;
+      rtc.initiator = initiator = true;
       sendOffer();
     } else {
-      rtc.initiator = false;
+      rtc.initiator = initiator = false;
     }
 
     // mark this connection as challenged
@@ -216,6 +217,7 @@ exports.connect = function(opts){
 
   function checkOpen(){
     var isOpen = connection && challenged && challenger &&
+      initiator !== null &&
       connection.signalingState == 'stable' &&
       connection.iceConnectionState != 'disconnected' &&
       (connection.iceConnectionState == 'connected' ||
@@ -447,6 +449,7 @@ exports.connect = function(opts){
     closeConnection()
     rtc.challenged = challenged = false;
     rtc.challenger = challenger = false;
+    rtc.initiator = initiator = null;
     checkOpen()
     keepSignal || signal.send('close')
   }

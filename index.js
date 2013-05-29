@@ -62,12 +62,15 @@ exports.connect = function(opts){
   })
   signal.on('offer',function(desc){
     if( !connection ) return;
+    debug.connection('remote offer')
     connection.setRemoteDescription(rewriteSDP(desc),function(){
+      debug.connection('create answer')
       connection.createAnswer(onLocalDescriptionAndSend);
     },onDescError('remote offer'));
   })
   signal.on('answer',function(desc){
     if( !connection ) return;
+    debug.connection('remote answer')
     connection.setRemoteDescription(rewriteSDP(desc),function(){},onDescError('remote answer'));
   })
   signal.on('candidate',function(candidate){

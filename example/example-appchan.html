@@ -32,7 +32,8 @@
           user: "{{.User}}",
           room: "{{.Room}}",
           token: "{{.Token}}",
-          dataChannels: ['hi']
+          dataChannels: ['hi'],
+          bufferCandidates: true
         });
 
         remote.on('addstream',function(e){
@@ -91,7 +92,7 @@
                   minFrameRate: 10
                 }
               },
-              audio: true
+              audio: false
             }
 
             getUserMedia(constraints,function success(stream){
@@ -125,7 +126,9 @@
               'initiator: '+remote.initiator,
               'open: '+remote.open,
               'challenged: '+remote.challenged,
-              'challenger: '+remote.challenger
+              'challenger: '+remote.challenger,
+              'remote streams: '+remote.connection.getRemoteStreams().length,
+              'local streams: '+remote.connection.getLocalStreams().length
             ].join('\n\t')
           }
 

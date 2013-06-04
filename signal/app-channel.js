@@ -94,6 +94,10 @@ function AppChannel(opts){
           debug('offer',json)
           signal.emit('offer',new RTCSessionDescription(json))
 
+        } else if( json && json.type == 'request-for-offer' ){
+          debug('request-for-offer')
+          signal.emit('request-for-offer')
+
         } else if( json && json.type == 'answer' ){
           debug('answer',json)
           signal.emit('answer',new RTCSessionDescription(json))
@@ -151,6 +155,7 @@ function AppChannel(opts){
 
     signal.send = function(msg){
       debug('send',msg)
+      var originalMessage = msg;
       if( opened ){
         // an event
         if( typeof msg == 'string' ){
@@ -172,13 +177,19 @@ function AppChannel(opts){
           msg = JSON.stringify(msg)
         }
         var req = new XMLHttpRequest()
-        req.onerror = socket.onerror.bind(socket)
+        req.onerror = function(e){
+          // socket.onerror(e)
+          console.error('error while sending app-channel-message (retrying)',e)
+          setTimeout(function(){
+            signal.send(originalMessage);
+          },100)
+        }
         req.open('POST', '/message?from='+opts.user+'-'+opts.room, true)
         req.setRequestHeader('Content-Type','application/json')
         req.send(msg)
       } else {
         console.error('attempted to send a message too early, waiting for open')
-        signal.on('open',signal.send.bind(signal,msg))
+        signal.on('open',signal.send.bind(signal,originalMessage))
       }
     }
 

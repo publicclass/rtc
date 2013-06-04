@@ -44,6 +44,7 @@ exports.connect = function(opts){
     , challenged = rtc.challenged = false
     , challenger = rtc.challenger = false
     , initiator = rtc.initiator = null
+    , negotiationneeded = false
     , streams = []
     , open = rtc.open = false;
 
@@ -62,16 +63,24 @@ exports.connect = function(opts){
   })
   signal.on('offer',function(desc){
     if( !connection ) return;
-    debug.connection('remote offer')
-    connection.setRemoteDescription(rewriteSDP(desc),function(){
-      debug.connection('create answer')
-      connection.createAnswer(onLocalDescriptionAndSend);
-    },onDescError('remote offer'));
+    debug.connection('remote offer',connection.signalingState,[desc])
+    if( connection.signalingState == 'stable' ){
+      connection.setRemoteDescription(rewriteSDP(desc),function(){
+        debug.connection('create answer')
+        connection.createAnswer(onLocalDescriptionAndSend);
+      },onDescError('remote offer'));
+    } else {
+      console.warn('received remote "offer" bit expected an "answer"')
+    }
   })
   signal.on('answer',function(desc){
     if( !connection ) return;
-    debug.connection('remote answer')
-    connection.setRemoteDescription(rewriteSDP(desc),function(){},onDescError('remote answer'));
+    debug.connection('remote answer',connection.signalingState,[desc])
+    if( connection.signalingState != 'stable' ){
+      connection.setRemoteDescription(rewriteSDP(desc),function(){},onDescError('remote answer'));
+    } else {
+      console.warn('received "answer" but expected an "offer"')
+    }
   })
   signal.on('candidate',function(candidate){
     if( !connection ) return;
@@ -81,7 +90,7 @@ exports.connect = function(opts){
       return;
     }
     try {
-      debug.connection('signal icecandidate',arguments)
+      // debug.connection('signal icecandidate',arguments)
       connection.addIceCandidate(candidate);
     } catch(e){
       console.log('signalingState',connection.signalingState)
@@ -90,20 +99,22 @@ exports.connect = function(opts){
       console.warn('ICE candidate: too soon?',e)
     }
   })
+  signal.on('request-for-offer',function(e){
+    debug.connection('signal request-for-offer')
+    sendOffer()
+  })
   signal.on('challenge',function(e){
     // a request-for-challenge
     if( e.challenge === null ){
       debug.connection('request-for-challenge',challenge)
-      signal.send({challenge:challenge})
-      rtc.challenger = challenger = true;
+      sendChallenge()
       return;
     }
 
     // in case a challenge was received without
     // having sent one we send it now.
     if( !challenger ){
-      signal.send({challenge:challenge});
-      rtc.challenger = challenger = true;
+      sendChallenge()
     }
 
     // the one with the lowest challenge
@@ -134,7 +145,7 @@ exports.connect = function(opts){
     // which peer should send the initial
     // offer (aka "initiator") we request
     // the peer to send us a challenge
-    signal.send({challenge:null})
+    requestChallenge()
   })
   signal.on('disconnected',function(){
     debug.connection('signal disconnected')
@@ -188,7 +199,7 @@ exports.connect = function(opts){
     }
     connection.onicecandidate = function(e){
       if( e.candidate ){
-        debug.connection('icecandidate %s',opts.bufferCandidates ? '(buffered)' : '',arguments)
+        // debug.connection('icecandidate %s',opts.bufferCandidates ? '(buffered)' : '',arguments)
         signal.send(e.candidate)
       } else {
         debug.connection('icecandidate end %s',opts.bufferCandidates ? '(buffered)' : '')
@@ -207,7 +218,9 @@ exports.connect = function(opts){
       debug.connection('negotiationneeded',arguments)
       rtc.emit('negotiationneeded',e)
       if( open ){
-        sendOffer()
+        rtc.offer()
+      } else {
+        negotiationneeded = true;
       }
     }
     connection.onsignalingstatechange =
@@ -235,10 +248,16 @@ exports.connect = function(opts){
       stopTimeout('isopen');
       rtc.open = open = true;
       rtc.emit('open')
+      addMissingStreams(connection);
+
+      if( negotiationneeded ){
+        console.log('NEGOTIATIONNEEDED ON OPEN')
+        rtc.offer()
+      }
 
     // closed -> closed
     } else if( !open && !isOpen ){
-      debug.connection('CLOSED -> CLOSED')
+      // debug.connection('CLOSED -> CLOSED')
       startTimeout('isopen')
 
     // open -> closed
@@ -250,7 +269,7 @@ exports.connect = function(opts){
 
     // open -> open
     } else {
-      debug.connection('OPEN -> OPEN')
+      // debug.connection('OPEN -> OPEN')
     }
   }
 
@@ -283,16 +302,13 @@ exports.connect = function(opts){
   function addMissingStreams(connection){
     // re-add any missing streams
     // [stream,constraints...]
-    var added = false;
     for(var i=0; i<streams.length; i+=2){
       var stream = streams[i];
       if( !getStreamById(connection,stream.id) ){
         debug.connection('re-added missing stream',stream.id)
         connection.addStream(stream);
-        added = true;
       }
     }
-    added && sendOffer()
   }
 
   // a fallback version of connection.getStreamById
@@ -395,9 +411,33 @@ exports.connect = function(opts){
 
   var sendOffer = function(){
     if( connection ){
-      debug.connection('send offer')
-      connection.createOffer(onLocalDescriptionAndSend);
+      debug.connection('send offer',connection.signalingState)
+      if( connection.signalingState != 'have-remote-offer' ){
+        connection.createOffer(onLocalDescriptionAndSend);
+      } else {
+        debug.connection('offer not sent because of signalingState',connection.signalingState)
+      }
+      negotiationneeded = false;
     }
+  }
+
+  var sendChallenge = function(){
+    debug.connection('send challenge',challenge)
+    signal.send({challenge:challenge})
+    rtc.challenger = challenger = true;
+  }
+
+  var requestOffer = function(){
+    if( connection ){
+      debug.connection('request offer')
+      signal.send({type:'request-for-offer'})
+      negotiationneeded = false;
+    }
+  }
+
+  var requestChallenge = function(){
+    debug.connection('request challenge')
+    signal.send({challenge:null})
   }
 
   var onDescError = function(src){
@@ -416,6 +456,16 @@ exports.connect = function(opts){
     if( connection ){
       connection.setLocalDescription(desc,function(){},onDescError('local '+desc.type))
       signal.send(desc)
+    }
+  }
+
+  rtc.offer = function(){
+    if( initiator === true ){
+      sendOffer()
+    } else if( initiator === false ){
+      requestOffer()
+    } else {
+      console.warn('attempting to offer before open')
     }
   }
 
@@ -443,7 +493,7 @@ exports.connect = function(opts){
     }
     connection = createConnection();
     createDataChannels();
-    addMissingStreams(connection);
+    requestChallenge();
     rtc.emit('reconnect')
     return this;
   }
@@ -472,11 +522,6 @@ exports.connect = function(opts){
     } else {
       console.error('tried to send to non-existing channel %s',label);
     }
-  }
-
-  rtc.start = function(){
-    debug.connection('start')
-    sendOffer()
   }
 
   // ensure we close properly before

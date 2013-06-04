@@ -49,6 +49,10 @@ function WebSocketSignal(opts){
         debug('offer',json)
         signal.emit('offer',new RTCSessionDescription(json))
 
+      } else if( json && json.type == 'request-for-offer' ){
+        debug('request-for-offer')
+        signal.emit('request-for-offer')
+
       } else if( json && json.type == 'answer' ){
         debug('answer',json)
         signal.emit('answer',new RTCSessionDescription(json))

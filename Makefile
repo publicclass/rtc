@@ -20,8 +20,8 @@ deploy-app-engine:
 
 # note: requires app engine sdk to be installed
 test-app-chan:
-	@echo "Open localhost:8001/xyz in your browser"
-	@(cd example && dev_appserver.py . --port 8001)
+	@echo "Open localhost:8081/xyz in your browser"
+	@(cd example && dev_appserver.py . --port 8081 --clear_datastore --automatic_restart)
 
 # note: requires node.js to be installed
 test-ws: node_modules

@@ -7,6 +7,12 @@
 
     $ component install publicclass/rtc
 
+## Test
+
+    $ make build
+    $ make test-app-chan # for the app-channel signal (requires go-app-engine-sdk)
+    $ make test-ws # for the web socket signal (requires node)
+
 ## API
 
 TODO

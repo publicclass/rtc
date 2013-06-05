@@ -25,8 +25,8 @@ test-app-chan:
 
 # note: requires node.js to be installed
 test-ws: node_modules
-	@echo "Open localhost:8002/example-ws.html in your browser"
+	@echo "Open localhost:8082/example-ws.html in your browser"
 	@(cd example && node relay.js &)
-	@(cd example && static -p 8002)
+	@(cd example && static -p 8082)
 
 .PHONY: clean

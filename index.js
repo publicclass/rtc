@@ -9,6 +9,10 @@ var PeerConnection = window.webkitRTCPeerConnection
                   || window.mozRTCPeerConnection
                   || window.RTCPeerConnection;
 
+exports.sdpConstraints = {'mandatory': {
+                          'OfferToReceiveAudio': true,
+                          'OfferToReceiveVideo': true }};
+
 exports.servers = { iceServers: [
   {url: 'stun:stun.l.google.com:19302'}
 ]}
@@ -68,7 +72,7 @@ exports.connect = function(opts){
     if( connection.signalingState == 'stable' ){
       connection.setRemoteDescription(rewriteSDP(desc),function(){
         debug.connection('create answer')
-        connection.createAnswer(onLocalDescriptionAndSend);
+        connection.createAnswer(onLocalDescriptionAndSend,null,exports.sdpConstraints);
       },onDescError('remote offer'));
     } else {
       console.warn('received remote "offer" bit expected an "answer"')
@@ -416,7 +420,7 @@ exports.connect = function(opts){
     if( connection ){
       debug.connection('send offer',connection.signalingState)
       if( connection.signalingState != 'have-remote-offer' ){
-        connection.createOffer(onLocalDescriptionAndSend);
+        connection.createOffer(onLocalDescriptionAndSend,null,exports.sdpConstraints);
       } else {
         debug.connection('offer not sent because of signalingState',connection.signalingState)
       }

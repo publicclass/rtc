@@ -56,13 +56,13 @@ exports.connect = function(opts){
   }
 
   signal.on('open',function(){
-    if( connection ) rtc.close()
+    if( connection ){ rtc.close() }
     connection = createConnection();
     createDataChannels();
     addMissingStreams(connection);
   })
   signal.on('offer',function(desc){
-    if( !connection ) return;
+    if( !connection ){ return; }
     debug.connection('remote offer',connection.signalingState,[desc])
     if( connection.signalingState == 'stable' ){
       connection.setRemoteDescription(rewriteSDP(desc),function(){
@@ -74,7 +74,7 @@ exports.connect = function(opts){
     }
   })
   signal.on('answer',function(desc){
-    if( !connection ) return;
+    if( !connection ){ return; }
     debug.connection('remote answer',connection.signalingState,[desc])
     if( connection.signalingState != 'stable' ){
       connection.setRemoteDescription(rewriteSDP(desc),function(){},onDescError('remote answer'));
@@ -83,7 +83,7 @@ exports.connect = function(opts){
     }
   })
   signal.on('candidate',function(candidate){
-    if( !connection ) return;
+    if( !connection ){ return; }
 
     // skip while disconnected
     if( connection.iceConnectionState == 'disconnected' ){

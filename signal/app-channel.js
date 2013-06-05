@@ -85,8 +85,12 @@ function AppChannel(opts){
 
       } else if( m.data == 'full' ){
         debug('full')
-        signal.emit('full')
+        signal.emit('event',{type:'full'})
         close()
+
+      } else if( !connected ){
+        console.warn('received messages from channel before being connected. ignoring.',m.data)
+        return;
 
       } else {
         var json = JSON.parse(m.data);

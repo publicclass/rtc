@@ -1,3 +1,4 @@
+/* globals goog: true */
 var Emitter = require('emitter')
   , debug = require('debug')('rtc:signal:appchan');
 

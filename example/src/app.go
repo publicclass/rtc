@@ -72,9 +72,11 @@ func OnConnect(w http.ResponseWriter, r *http.Request) {
       // user already in the room
       // just send "connected" again in
       // case it was missed last time
+      c.Debugf("User already in room")
 
     // or see if it's full
     } else if room.Occupants() == 2 {
+      c.Debugf("Room full")
       if err := channel.Send(c, MakeClientId(roomName, userName), "full"); err != nil {
         c.Criticalf("Error while sending full:",err)
       }
@@ -82,9 +84,9 @@ func OnConnect(w http.ResponseWriter, r *http.Request) {
 
     // or add a user to the room
     } else {
+      c.Debugf("Adding user to room")
       room.AddUser(userName)
-      err = PutRoom(c, roomName, room)
-      if err != nil {
+      if err := PutRoom(c, roomName, room); err != nil {
         c.Criticalf("Connected could not put room %s: ",roomName,err)
       }
     }

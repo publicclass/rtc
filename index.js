@@ -34,6 +34,7 @@ exports.connect = function(opts){
   opts.dataChannels = opts.dataChannels || false;
   opts.connectionTimeout = opts.connectionTimeout || 30000;
   opts.turnConfigURL = opts.turnConfigURL || '';
+  opts.autoNegotiate = typeof opts.autoNegotiate == 'boolean' ? opts.autoNegotiate : true;
 
   var rtc = Emitter({})
     , channels = rtc.channels = {}
@@ -217,10 +218,12 @@ exports.connect = function(opts){
     connection.onnegotiationneeded = function(e){
       debug.connection('negotiationneeded',arguments)
       rtc.emit('negotiationneeded',e)
-      if( open ){
-        rtc.offer()
-      } else {
-        negotiationneeded = true;
+      if( opts.autoNegotiate ){
+        if( open ){
+          rtc.offer()
+        } else {
+          negotiationneeded = true;
+        }
       }
     }
     connection.onsignalingstatechange =

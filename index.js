@@ -75,7 +75,7 @@ exports.connect = function(opts){
         connection.createAnswer(onLocalDescriptionAndSend,null,exports.sdpConstraints);
       },onDescError('remote offer'));
     } else {
-      console.warn('received remote "offer" bit expected an "answer"')
+      debug.connection('received remote "offer" bit expected an "answer"')
     }
   })
   signal.on('answer',function(desc){
@@ -84,7 +84,7 @@ exports.connect = function(opts){
     if( connection.signalingState != 'stable' ){
       connection.setRemoteDescription(rewriteSDP(desc),function(){},onDescError('remote answer'));
     } else {
-      console.warn('received "answer" but expected an "offer"')
+      debug.connection('received "answer" but expected an "offer"')
     }
   })
   signal.on('candidate',function(candidate){
@@ -95,13 +95,10 @@ exports.connect = function(opts){
       return;
     }
     try {
-      // debug.connection('signal icecandidate',arguments)
+      debug.connection('signal icecandidate',arguments)
       connection.addIceCandidate(candidate);
     } catch(e){
-      console.log('signalingState',connection.signalingState)
-      console.log('iceConnectionState',connection.iceConnectionState)
-      console.log('iceGatheringState',connection.iceGatheringState)
-      console.warn('ICE candidate: too soon?',e)
+      console.warn('failed to add ice candidate. was it received from a previous connection?',e)
     }
   })
   signal.on('request-for-offer',function(e){
@@ -258,13 +255,13 @@ exports.connect = function(opts){
       addMissingStreams(connection);
 
       if( negotiationneeded ){
-        console.log('NEGOTIATIONNEEDED ON OPEN')
+        debug.connection('negotiationneeded on open')
         rtc.offer()
       }
 
     // closed -> closed
     } else if( !open && !isOpen ){
-      // debug.connection('CLOSED -> CLOSED')
+      debug.connection('CLOSED -> CLOSED')
       startTimeout('isopen')
 
     // open -> closed
@@ -276,7 +273,7 @@ exports.connect = function(opts){
 
     // open -> open
     } else {
-      // debug.connection('OPEN -> OPEN')
+      debug.connection('OPEN -> OPEN')
     }
   }
 
@@ -301,6 +298,7 @@ exports.connect = function(opts){
       channel = connection.createDataChannel(label,{reliable: false});
     } catch (e) {
       console.error('Create Data channel failed with exception: ' + e.message);
+      return null;
     }
     channels[label] = initDataChannel(channel);
     return channel;

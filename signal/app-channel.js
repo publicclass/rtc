@@ -22,6 +22,18 @@ function AppChannel(opts){
   var retryAttempts = 0;
   var signal = Emitter({});
 
+  // default to queue send()
+  signal.send = function(msg){
+    signal.on('open',function(){
+      signal.send(msg)
+    })
+  }
+
+  // for when the app channel api failed to load
+  if( typeof goog == 'undefined' ){
+    return signal;
+  }
+
   // token is required and will be empty
   // when quota is full (see error log on server)
   if( !opts.token ){
@@ -40,11 +52,6 @@ function AppChannel(opts){
     };
     req.open('POST', '/_token?room='+opts.room, true)
     req.send()
-    return signal;
-  }
-
-  // for when the app channel api failed to load
-  if( typeof goog == 'undefined' ){
     return signal;
   }
 
@@ -215,13 +222,15 @@ function AppChannel(opts){
     // ensure the room is disconnect on leave
     var _before = window.onbeforeunload;
     window.onbeforeunload = function(){
-      try {
-        var req = new XMLHttpRequest()
-        req.open('POST', '/_disconnect?from='+opts.user+'-'+opts.room, false)
-        req.send()
-      } catch(e){
-        // ignored because it should be done from the
-        // backend anyway
+      if( connected ){
+        try {
+          var req = new XMLHttpRequest()
+          req.open('POST', '/_disconnect?from='+opts.user+'-'+opts.room, false)
+          req.send()
+        } catch(e){
+          // ignored because it should be done from the
+          // backend anyway
+        }
       }
 
       // chain in case there's other listeners

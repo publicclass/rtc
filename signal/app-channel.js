@@ -25,6 +25,17 @@ function AppChannel(opts){
   // token is required and will be empty
   // when quota is full (see error log on server)
   if( !opts.token ){
+    var req = new XMLHttpRequest()
+    req.onload = function(){
+      if( req.readyState == 4 && req.status == 200 ){
+        var q = qs(req.responseText);
+        opts.user = q.user;
+        opts.token = q.token;
+        create()
+      }
+    };
+    req.open('POST', '/_token?room='+opts.room, true)
+    req.send()
     return signal;
   }
 
@@ -32,8 +43,6 @@ function AppChannel(opts){
   if( typeof goog == 'undefined' ){
     return signal;
   }
-
-  var channel = new goog.appengine.Channel(opts.token)
 
   function create(){
     debug('create',opts.token,opts.room,opts.user)
@@ -44,7 +53,8 @@ function AppChannel(opts){
       return signal.emit('error',new Error('unable to connect to signal: '+opts.token))
     }
 
-    var socket = channel.open()
+    var channel = new goog.appengine.Channel(opts.token)
+      , socket = channel.open()
       , connected = null
       , opened = false
       , candidates = [];
@@ -58,7 +68,7 @@ function AppChannel(opts){
       // totally non-functioning, presence service
       // in google appengine)
       var req = new XMLHttpRequest()
-      req.open('POST', '/connect?from='+opts.user+'-'+opts.room, false)
+      req.open('POST', '/_connect?from='+opts.user+'-'+opts.room, false)
       req.send()
 
       signal.emit('open') // create the peer connection here
@@ -189,7 +199,7 @@ function AppChannel(opts){
             signal.send(originalMessage);
           },100)
         }
-        req.open('POST', '/message?from='+opts.user+'-'+opts.room, true)
+        req.open('POST', '/_message?from='+opts.user+'-'+opts.room, true)
         req.setRequestHeader('Content-Type','application/json')
         req.send(msg)
       } else {
@@ -203,7 +213,7 @@ function AppChannel(opts){
     window.onbeforeunload = function(){
       try {
         var req = new XMLHttpRequest()
-        req.open('POST', '/disconnect?from='+opts.user+'-'+opts.room, false)
+        req.open('POST', '/_disconnect?from='+opts.user+'-'+opts.room, false)
         req.send()
       } catch(e){
         // ignored because it should be done from the
@@ -235,4 +245,16 @@ function AppChannel(opts){
     return signal;
   }
   return create();
+}
+
+function qs(query){
+  var obj = {};
+  var vars = query.split('&');
+  for (var i = 0; i < vars.length; i++) {
+    var pair = vars[i].split('=')
+      , key = decodeURIComponent(pair[0])
+      , val = decodeURIComponent(pair[1]);
+    obj[key] = val;
+  }
+  return obj;
 }

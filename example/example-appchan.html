@@ -29,9 +29,7 @@
       if( rtc.available ){
 
         var remote = rtc.connect({
-          user: "{{.User}}",
           room: "{{.Room}}",
-          token: "{{.Token}}",
           dataChannels: ['hi'],
           bufferCandidates: true
         });

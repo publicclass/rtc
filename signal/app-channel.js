@@ -31,7 +31,11 @@ function AppChannel(opts){
         var q = qs(req.responseText);
         opts.user = q.user;
         opts.token = q.token;
-        create()
+        if( opts.user && opts.token ){
+          q.type = 'token';
+          signal.emit('event',q)
+          create()
+        }
       }
     };
     req.open('POST', '/_token?room='+opts.room, true)

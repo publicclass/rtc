@@ -73,8 +73,6 @@
 
 ## API
 
-  TODO
-
 ### rtc.servers
 
   The [RTCConfiguration](http://www.w3.org/TR/webrtc/#idl-def-RTCConfiguration) Dictionary. Defaults to use the Google STUN server but if the `turnConfigURL`-option is set it will be updated when the TURN configuration server responds.

@@ -57,7 +57,7 @@
       remote.addStream(stream);
     })
 
-  For more complete examples look in the [example/]() directory.
+  For more complete examples look in the [example/](example/) directory.
 
 ## Installation
 

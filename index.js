@@ -48,6 +48,7 @@ exports.connect = function(opts){
     , challenge = Date.now() + Math.random()
     , challenged = rtc.challenged = false
     , challenger = rtc.challenger = false
+    , connected = rtc.connected = false
     , initiator = rtc.initiator = null
     , negotiationneeded = false
     , streams = []
@@ -138,7 +139,10 @@ exports.connect = function(opts){
     // (a requirement to be considered "open")
     rtc.challenged = challenged = true;
 
-    rtc.emit('connected')
+    if( !connected ){
+      rtc.connected = connected = true;
+      rtc.emit('connected')
+    }
   })
   signal.on('connected',function(){
     debug.connection('signal connected')
@@ -151,7 +155,10 @@ exports.connect = function(opts){
   })
   signal.on('disconnected',function(){
     debug.connection('signal disconnected')
-    rtc.emit('disconnected')
+    if( connected ){
+      rtc.emit('disconnected')
+      rtc.connected = connected = false;
+    }
     rtc.reconnect()
   })
   signal.on('event',function(evt){

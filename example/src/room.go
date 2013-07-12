@@ -63,6 +63,9 @@ func GetRoom(c appengine.Context, name string) (*Room, error) {
   k := datastore.NewKey(c, "Room", name, 0, nil)
   r := new(Room)
   err := datastore.Get(c, k, r)
+  if err == datastore.ErrNoSuchEntity {
+    return nil, err
+  }
   return r, err;
 }
 
@@ -89,40 +92,4 @@ func DelRooms(c appengine.Context, rooms []Room) error {
   c.Debugf("Deleting Rooms: %+v",keys)
   err := datastore.DeleteMulti(c, keys)
   return err;
-}
-
-func TotalOccupants(c appengine.Context) (int, error) {
-  q := datastore.NewQuery("Room")
-  t := 0
-  for x := q.Run(c); ; {
-    var r Room
-    _, err := x.Next(&r)
-    if err == datastore.Done {
-      break;
-    }
-    if err != nil {
-      return -1, err
-    }
-    t += r.Occupants()
-  }
-  return t, nil
-}
-
-func ExpiredRooms(c appengine.Context) ([]Room, error) {
-  an_hour_ago := time.Now().Add(-time.Hour)
-  rooms := make([]Room,0)
-  q := datastore.NewQuery("Room").Filter("LastChanged <",an_hour_ago)
-  for x := q.Run(c); ; {
-    var room Room
-    _, err := x.Next(&room)
-    if err == datastore.Done {
-      break;
-    }
-    if err != nil {
-      return nil, err
-    }
-    c.Debugf("ExpiredRoom: %+v",room)
-    rooms = append(rooms, room)
-  }
-  return rooms, nil
 }

@@ -21,24 +21,34 @@ func Main(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
   w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-  roomName := strings.TrimLeft(r.URL.Path,"/")
+  // clean up the roomName to avoid xss
+  roomName := Cleanup(strings.TrimLeft(r.URL.Path,"/"))
 
   // Data to be sent to the template:
   data := Template{Room: roomName}
 
-  // Empty room
-  if _, err := GetRoom(c, roomName); err != nil {
-    room := new(Room)
-    c.Debugf("Created room %s",roomName)
-    if err := PutRoom(c, roomName, room); err != nil {
-      c.Criticalf("!!! could not save room: %s", err)
+  if roomName == "" {
+    c.Debugf("Room with no name. Redirecting.")
+    roomName = Random(6)
+    http.Redirect(w, r, roomName, 302);
+
+  } else {
+    room, err := GetRoom(c, roomName)
+
+    // Empty room
+    if room == nil {
+      room = new(Room)
+      c.Debugf("Created room %s",roomName)
+      if err := PutRoom(c, roomName, room); err != nil {
+        c.Criticalf("Error occured while creating room %s: %+v", roomName, err)
+        return;
+      }
+
+    // DataStore error
+    } else if err != nil {
+      c.Criticalf("Error occured while getting room %s: %+v",roomName,err)
       return;
     }
-
-  // DataStore error
-  } else if err != nil {
-    c.Criticalf("Error occured while getting room %s",roomName,err)
-    return;
   }
 
   // Parse the template and output HTML:
@@ -141,11 +151,11 @@ func OnDisconnect(w http.ResponseWriter, r *http.Request) {
       c.Debugf("OnDisconnect: Room is now empty.")
 
     } else if otherUser != "" {
-      c.Debugf("disconnected sent to %s",MakeClientId(roomName, otherUser))
+      c.Debugf("Removed %s. Sending 'disconnected' to %s",userName,MakeClientId(roomName, otherUser))
       if err := channel.Send(c, MakeClientId(roomName, otherUser), "disconnected"); err != nil {
         c.Criticalf("OnDisconnect: Error while sending 'disconnected':",err)
       }
-      c.Debugf("disconnected sent to %s",MakeClientId(roomName, userName))
+      c.Debugf("Removed %s. Sending 'disconnected' to %s",userName,MakeClientId(roomName, userName))
       if err := channel.Send(c, MakeClientId(roomName, userName), "disconnected"); err != nil {
         c.Criticalf("OnDisconnect: Error while sending 'disconnected':",err)
       }
@@ -216,8 +226,10 @@ func ReadData(d []byte) (interface{}, error) {
 
 func Cleanup(str string) string {
   re := regexp.MustCompile("[^\\w\\d]+")
-  str = re.ReplaceAllLiteralString(str,".")
-  return str
+  str = re.ReplaceAllLiteralString(str,"-")
+  re = regexp.MustCompile("-+")
+  str = re.ReplaceAllLiteralString(str,"-")
+  return strings.Trim(str,"- ")
 }
 
 func init() {

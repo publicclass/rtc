@@ -3,102 +3,111 @@
   <head>
     <meta charset='utf8'>
     <title>rtc component</title>
+    <style>
+    pre { display: inline-block; width: 250px; vertical-align: top; }
+    video { background: lightgray; }
+    </style>
   </head>
   <body>
-    <button id='toggle-video' onclick='toggleVideo()'>Add Video</button>
     <video id='local-video' width='320' height='240' autoplay muted></video>
     <video id='remote-video' width='320' height='240' autoplay></video>
-    <pre id='info'></p>
+    <div>
+      <button id='toggle-video' onclick='toggleVideo()'>Add Video</button>
+      <button id='reconnect' onclick='remote.reconnect()' disabled>Reconnect</button>
+    </div>
+    <div>
+      <pre id='info'></pre>
+      <pre id='log'></pre>
+    </div>
 
     <script src='/_ah/channel/jsapi'></script>
     <script src='build.js'></script>
     <script>
       require('visionmedia-debug').enable('rtc:*')
 
+      var start = Date.now();
       var localVideo = document.getElementById('local-video');
       var remoteVideo = document.getElementById('remote-video');
+      var btn = document.getElementById('toggle-video');
+      var reconnect = document.getElementById('reconnect');
       var info = document.getElementById('info');
-      var rtc = require('rtc');
+      var log = document.getElementById('log');
       var localStream;
+      var rtc = require('rtc');
 
       var getUserMedia = (navigator.getUserMedia
                        || navigator.webkitGetUserMedia
                        || navigator.mozGetUserMedia
-                       || navigator.msGetUserMedia).bind(navigator);
+                       || navigator.msGetUserMedia
+                       || function(ok,err){err(new Error('unavailable'))}).bind(navigator);
 
       if( rtc.available ){
+        var constraints = {
+          video: {
+            mandatory: {
+              maxWidth: 320,
+              maxHeight: 240,
+              minFrameRate: 10
+            }
+          },
+          audio: false
+        }
 
+        writeLog('CONNECTING TO {{.Room}}')
         var remote = rtc.connect({
           room: "{{.Room}}",
-          dataChannels: ['hi'],
-          bufferCandidates: true
+          dataChannels: 'hi'
         });
 
         remote.on('addstream',function(e){
-          remoteVideo.src = window.webkitURL
-              ? window.webkitURL.createObjectURL(e.stream)
-              : window.URL
-              ? window.URL.createObjectURL(e.stream)
-              : e.stream;
+          writeLog('ADD REMOTE STREAM')
+          remoteVideo.src = URL.createObjectURL(e.stream);
         })
         remote.on('removestream',function(){
+          writeLog('REMOVE REMOTE STREAM')
           remoteVideo.src = '';
         })
-        remote.on('timeout',function(){
-          console.log('CONNECTION TIMED OUT')
-        })
-        remote.on('open',function(){
-          console.log('OPENED')
-        })
-        remote.on('close',function(){
-          console.log('CLOSED')
-        })
-        remote.on('full',function(){
-          console.log('FULL')
-        })
+        remote.on('timeout',function(){ writeLog('CONNECTION TIMED OUT') })
+        remote.on('open',function(){ writeLog('OPENED') })
+        remote.on('close',function(){ writeLog('CLOSED') })
+        remote.on('full',function(){ writeLog('FULL') })
         remote.on('connected',function(){
-          console.log('CONNECTED\n')
+          writeLog('CONNECTED')
+          reconnect.disabled = false;
         })
         remote.on('disconnected',function(){
-          console.log('DISCONNECTED\n')
+          writeLog('DISCONNECTED')
           remoteVideo.src = '';
+          reconnect.disabled = true;
         })
         remote.on('channel open',function(e){
-          console.log('CHANNEL OPENED')
+          writeLog('CHANNEL OPENED')
+          if( remote.initiator ){
+            remote.channels.hi.send('hi from initiator!')
+          } else {
+            remote.channels.hi.send('hi!')
+          }
         })
         remote.on('channel message',function(e){
-          console.log('CHANNEL MESSAGE',e.data)
+          writeLog('CHANNEL MESSAGE RECEIVED: '+e.data)
         })
         remote.on('channel close',function(e){
-          console.log('CHANNEL CLOSED')
+          writeLog('CHANNEL CLOSED')
         })
         remote.on('error',function(e){
+          writeLog('ERROR: '+e.message)
           console.error('ERROR',e.message)
         })
 
         // 1. request the webcam
         // 2. remove stream from peer connection
         // 3. add back stream from peer connection
-        var btn = document.getElementById('toggle-video');
         function toggleVideo(){
+          writeLog('CLICKED TOGGLE VIDEO')
           if( !localStream ){
-            var constraints = {
-              video: {
-                mandatory: {
-                  maxWidth: 320,
-                  maxHeight: 240,
-                  minFrameRate: 10
-                }
-              },
-              audio: false
-            }
-
             getUserMedia(constraints,function success(stream){
-              // show it locally
-              localVideo.src = window.webkitURL
-                ? window.webkitURL.createObjectURL(stream)
-                : stream;
-
+              writeLog('ADD LOCAL STREAM')
+              localVideo.src = URL.createObjectURL(stream);
               remote.addStream(stream)
               localStream = stream;
               btn.innerText = 'Remove Stream';
@@ -116,25 +125,22 @@
         function updateInfo(){
           var str = '';
           if( remote.connection ){
-            str += '\n\n'
-            str += [ 'Connection:',
+            str += [
               'ice: '+remote.connection.iceConnectionState,
               'gathering: '+remote.connection.iceGatheringState,
               'signal: '+remote.connection.signalingState,
               'initiator: '+remote.initiator,
               'open: '+remote.open,
+              'connected: '+remote.connected,
               'challenged: '+remote.challenged,
               'challenger: '+remote.challenger,
               'remote streams: '+remote.connection.getRemoteStreams().length,
               'local streams: '+remote.connection.getLocalStreams().length
-            ].join('\n\t')
+            ].join('\n')
           }
 
           if( remote.channels.hi ){
-            str += '\n\n'
-            str += [ 'DataChannel:',
-              'state: '+remote.channels.hi.readyState
-            ].join('\n\t')
+            str += '\ndata channel state: '+remote.channels.hi.readyState
           }
           info.innerText = str
         }
@@ -142,8 +148,29 @@
         setInterval(updateInfo,100)
 
       } else {
-        console.error('rtc not availabe on your platform')
+        console.error('rtc is not available on your platform')
+        writeLog('rtc is not available on your platform')
       }
+
+      var last = start;
+      function writeLog(msg){
+        var now = Date.now();
+        var diff = now-last || 0;
+        var prefix = diff >= 0 ? '+' : '-';
+        var suffix = 'ms';
+        if( diff > 1000 ){
+          diff = Math.round(diff/1000);
+          suffix = 's';
+          if( diff > 60 ){
+            diff = Math.round(diff/60);
+            suffix = 'm';
+          }
+        }
+        log.innerText = prefix+diff+suffix+'\t'+msg+'\n' + log.innerText;
+        console.log(msg)
+        last = now;
+      }
+
     </script>
   </body>
 </html>

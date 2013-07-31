@@ -220,25 +220,28 @@ function AppChannel(opts){
     }
 
     // ensure the room is disconnect on leave
-    var _before = window.onbeforeunload;
-    window.onbeforeunload = function(){
-      if( connected ){
-        try {
-          var req = new XMLHttpRequest()
-          req.open('POST', '/_disconnect?from='+opts.user+'-'+opts.room, false)
-          req.send()
-        } catch(e){
-          // ignored because it should be done from the
-          // backend anyway
+    try {
+      var _before = window.onbeforeunload;
+      window.onbeforeunload = function(){
+        if( connected ){
+          try {
+            var req = new XMLHttpRequest()
+            req.open('POST', '/_disconnect?from='+opts.user+'-'+opts.room, false)
+            req.send()
+          } catch(e){
+            // ignored because it should be done from the
+            // backend anyway
+          }
+        }
+
+        // chain in case there's other listeners
+        if( typeof _before == 'function' ){
+          _before.apply(window,arguments);
         }
       }
-
-      // chain in case there's other listeners
-      if( typeof _before == 'function' ){
-        _before.apply(window,arguments);
-      }
+    } catch(e){
+      console.log(e)
     }
-
 
     function close(){
       debug('close')

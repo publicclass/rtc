@@ -543,15 +543,20 @@ exports.connect = function(opts){
   // ensure we close properly before
   // unload. (hoping this will lessen
   // the "Aw snap" errors)
-  var _before = window.onbeforeunload;
-  window.onbeforeunload = function() {
-    stopTimeout('unload');
-    rtc.close();
+  try {
+    var _before = window.onbeforeunload;
+    window.onbeforeunload = function() {
+      stopTimeout('unload');
+      rtc.close();
 
-    // chain in case there's other listeners
-    if( typeof _before == 'function' ){
-      _before.apply(window,arguments);
+      // chain in case there's other listeners
+      if( typeof _before == 'function' ){
+        _before.apply(window,arguments);
+      }
     }
+  } catch(e){
+    // wrapped in try/catch in case onbeforeunload
+    // is not available (such as in a packaged app)
   }
 
   // request optional turn configuration

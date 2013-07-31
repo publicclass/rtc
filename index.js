@@ -1,5 +1,6 @@
 var Emitter = require('emitter')
   , WebSocketSignal = require('./signal/web-socket')
+  , BridgeSignal = require('./signal/bridge')
   , AppChannelSignal = require('./signal/app-channel')
   , debug = { connection: require('debug')('rtc:connection'),
               channel: require('debug')('rtc:channel') };
@@ -39,6 +40,7 @@ exports.connect = function(opts){
   opts.connectionTimeout = opts.connectionTimeout || 30000;
   opts.turnConfigURL = opts.turnConfigURL || '';
   opts.autoNegotiate = typeof opts.autoNegotiate == 'boolean' ? opts.autoNegotiate : true;
+  opts.signal = opts.signal || (typeof goog != undefined ? 'appchan' : 'ws');
 
   var rtc = Emitter({})
     , channels = rtc.channels = {}
@@ -54,10 +56,12 @@ exports.connect = function(opts){
     , streams = []
     , open = rtc.open = false;
 
-  // default to appchannel signal
+  // create a signal
   if( opts.signal == 'ws' ){
     signal = rtc.signal = new WebSocketSignal(opts)
-  } else {
+  } else if( opts.signal == 'bridge' ){
+    signal = rtc.signal = new BridgeSignal(opts)
+  } else if( opts.signal == 'appchan' ){
     signal = rtc.signal = new AppChannelSignal(opts)
   }
 

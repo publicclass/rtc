@@ -12,7 +12,8 @@
   "license": "MIT",
   "scripts": [
     "index.js",
+    "signal/web-socket.js",
     "signal/app-channel.js",
-    "signal/web-socket.js"
+    "signal/bridge.js"
   ]
 }

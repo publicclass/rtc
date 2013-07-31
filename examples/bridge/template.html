@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset='utf8'>
+    <title>rtc bridge</title>
+  </head>
+  <body>
+    <script src='/_ah/channel/jsapi'></script>
+    <script>
+      window.addEventListener('message',onWindowMessage);
+      window.addEventListener('exit',onWindowExit); // webview
+      window.addEventListener('beforeunload',onWindowExit); // iframe
+
+      var debug = console.log.bind(console,'iframe');
+
+      var opts = {};
+      opts.room = '{{.Room}}';
+      opts.timeout = opts.timeout || 15000;
+      opts.retryTimeout = opts.retryTimeout || 5000;
+      opts.maxAttempts = opts.maxAttempts || 5;
+      opts.bufferCandidates = opts.bufferCandidates || false;
+
+      var retryTimeout = opts.retryTimeout;
+      var retryAttempts = 0;
+      var appSource;
+      var appOrigin;
+      var messageQueue = [];
+      var socket;
+
+      function send(){
+        if( appSource ){
+          debug('send',arguments)
+          appSource.postMessage(arguments,appOrigin)
+        } else {
+          debug('send (queue)',arguments)
+          messageQueue.push(arguments);
+        }
+      }
+
+      function create(){
+        var channel = new goog.appengine.Channel(opts.token)
+          , socket = channel.open()
+          , opened = false
+          , buffer = [];
+
+        socket.onopen = function(){
+          debug('open')
+          opened = true;
+
+          // Make sure server knows we connected.
+          // (a workaround for unreliable, and sometimes
+          // totally non-functioning, presence service
+          // in google appengine)
+          var req = new XMLHttpRequest()
+          req.onload = function(){
+            if( req.readyState == 4 && req.status == 200 ){
+              send('open')
+
+
+              // send buffered messages
+              while(buffer.length){
+                socket.send.apply(socket,buffer.shift());
+              }
+            }
+          }
+          req.open('POST', '/_connect?from='+opts.user+'-'+opts.room, true)
+          req.send()
+          clearTimeout(socket.timeout)
+        }
+
+        socket.onmessage = function(m){
+          // reset retry timeout on first message
+          retryTimeout = opts.retryTimeout;
+          retryAttempts = 0;
+          send(m);
+        }
+
+        socket.onerror = function(e){
+          console.error('Socket error: ',e)
+          send('error', e)
+          close()
+        }
+
+        socket.onclose = function(){
+          // TODO emit "close" only after a few attempts
+          //      and possible "reconnected" if retries
+          //      work...
+          debug('closed (retrying in %sms)',retryTimeout)
+          clearTimeout(socket.timeout)
+          socket.timeout = setTimeout(create,retryTimeout)
+        }
+
+        clearTimeout(socket.timeout)
+        socket.timeout = setTimeout(function(e){
+          debug('timed out (retrying in %sms)',retryTimeout)
+          clearTimeout(socket.timeout)
+          socket.timeout = setTimeout(create,retryTimeout)
+        },opts.timeout)
+
+        socket.send = function(msg){
+          debug('send',msg)
+          if( opened ){
+            var req = new XMLHttpRequest()
+            req.onerror = function(e){
+              // socket.onerror(e)
+              console.error('error while sending app-channel-message (retrying)',e)
+              setTimeout(function(){
+                socket.send(msg);
+              },100)
+            }
+            req.open('POST', '/_message?from='+opts.user+'-'+opts.room, true)
+            req.setRequestHeader('Content-Type','application/json')
+            req.send(msg)
+          } else {
+            console.error('attempted to send a message too early, waiting for open')
+            buffer.push(originalMessage)
+          }
+        }
+
+        return socket;
+      }
+
+      function getToken(){
+        var req = new XMLHttpRequest()
+        req.onload = function(){
+          if( req.readyState == 4 && req.status == 200 ){
+            var q = qs(req.responseText);
+            opts.user = q.user;
+            opts.token = q.token;
+            if( opts.user && opts.token ){
+              q.type = 'token';
+              socket = create();
+            }
+          }
+        };
+        req.open('POST', '/_token?room='+opts.room, true)
+        req.send()
+      }
+
+      function qs(query){
+        var obj = {};
+        var vars = query.split('&');
+        for (var i = 0; i < vars.length; i++) {
+          var pair = vars[i].split('=')
+            , key = decodeURIComponent(pair[0])
+            , val = decodeURIComponent(pair[1]);
+          obj[key] = val;
+        }
+        return obj;
+      }
+
+      function onWindowExit(){
+        console.log("UNLOAD!")
+        try {
+          var req = new XMLHttpRequest()
+          req.open('POST', '/_disconnect?from='+opts.user+'-'+opts.room, true)
+          req.send()
+        } catch(e){}
+      }
+
+      function onWindowMessage(e){
+        debug('window message',e)
+        // TODO check e.origin and e.source
+
+        if( e.origin && e.source && !appSource ){
+          appOrigin = e.origin;
+          appSource = e.source;
+
+          // empty send buffer up to origin
+          while(messageQueue.length){
+            send.apply(null,messageQueue.shift());
+          }
+        }
+
+        if( e.data == 'ping' ){
+          send('pong');
+        }
+
+        else if( typeof e.data == 'object' && 'message' in e.data ){
+          console.log('SEND THROUGH APP CHANNEL',e.data.message)
+          if( !socket ){
+            console.warn("CANNOT MISSING SOCKET!!!!")
+          } else {
+            socket.send(e.data.message)
+          }
+        }
+      }
+
+      getToken();
+    </script>
+  </body>
+</html>

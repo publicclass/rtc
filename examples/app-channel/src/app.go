@@ -52,7 +52,7 @@ func Main(w http.ResponseWriter, r *http.Request) {
   }
 
   // Parse the template and output HTML:
-  template, err := template.ParseFiles("example-appchan.html")
+  template, err := template.ParseFiles("template.html")
   if err != nil { c.Criticalf("execution failed: %s", err) }
   err = template.Execute(w, data)
   if err != nil { c.Criticalf("execution failed: %s", err) }

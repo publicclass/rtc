@@ -1,0 +1,14 @@
+application: webrtcgame
+version: bridge
+runtime: go
+api_version: go1
+
+handlers:
+- url: /(.*\.(js|html))
+  static_files: public/\1
+  upload: public/.*
+- url: /.*
+  script: _go_app
+
+inbound_services:
+- channel_presence

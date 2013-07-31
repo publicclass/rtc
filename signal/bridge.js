@@ -170,24 +170,28 @@ function createElement(src,fn){
   try { window.localStorage } // will fail in a packaged app
   catch(e){ type = 'webview' }
   var element = document.createElement(type);
-  element.src = src;
-  element.seamless = true;
-  element.allowtransparency = true;
-  element.frameBorder = '0';
-  element.scrolling = 'no';
   element.width = 0;
   element.height = 0;
-  element.style.width = '0px';
-  element.style.height = '0px';
-  element.style.display = 'none';
 
   if( type == 'iframe' ){
     // TODO also check for errors line onerror
     element.onload = fn;
+    element.setAttribute('seamless','seamless');
+    element.setAttribute('frameBorder','0');
+    element.setAttribute('allowTransparency','true');
+    element.setAttribute('scrolling','no');
   } else {
     // TODO also check for errors like loadabort or unresponsive?
-    element.addEventListener('loadstop',fn);
+    element.addEventListener('loadstart',function(){console.log('webview load start',arguments)});
+    element.addEventListener('loadabort',function(){console.log('webview load abort',arguments)});
+    element.addEventListener('loadstop',function(){console.log('webview load stop',arguments); fn()});
+    element.style.width = '0px';
+    element.style.height = '0px';
+    element.style.visibility = 'hidden';
   }
+  element.setAttribute('src',src);
+
+  console.log('bridge creating "%s" element',type,src,element)
 
   document.body.appendChild(element);
 

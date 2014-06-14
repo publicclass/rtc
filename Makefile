@@ -42,6 +42,6 @@ test-app-chan:
 test-ws: node_modules
 	@echo "Open localhost:8082/example.html in your browser"
 	@(cd examples/web-socket && node relay.js &)
-	@(cd examples/web-socket && static -p 8082)
+	@(cd examples/web-socket && node_modules/.bin/static -p 8082)
 
 .PHONY: clean build

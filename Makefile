@@ -1,25 +1,25 @@
 
 build: node_modules components build/build.js
-	@: # silent
+	@:
 
-build/build.js: signal/*.js index.js component.json
-	node_modules/.bin/component build --dev
+build/build.js: index.js signal/*.js
+	@node_modules/.bin/component build --dev
 
-components/: component.json
-	node_modules/.bin/component install --dev
+components: component.json
+	@node_modules/.bin/component install --dev
 
-node_modules/: package.json
+node_modules: package.json
 	@npm i
 
 clean:
-	rm -fr build components template.js
+	rm -fr build components node_modules
 
 # note: requires access to application
 # create your own application and update
 # example/app.yaml if you want to test it
 # for yourself
-deploy-app-engine:
-	(cd examples/app-channel && appcfg.py update --oauth2 .)
+deploy-app-engine-go:
+	(cd examples/app-channel-go && appcfg.py update --oauth2 .)
 
 # note: requires access to application
 # create your own application and update
@@ -34,14 +34,15 @@ test-bridge:
 	@(cd examples/bridge && dev_appserver.py . --port 8083 --clear_datastore --automatic_restart)
 
 # note: requires app engine sdk to be installed
-test-app-chan:
+test-app-chan-go:
 	@echo "Open localhost:8081/xyz in your browser"
-	@(cd examples/app-channel && dev_appserver.py . --port 8081 --clear_datastore --automatic_restart)
+	@(cd examples/app-channel-go && dev_appserver.py . --port 8081 --clear_datastore --automatic_restart)
 
 # note: requires node.js to be installed
-test-ws: node_modules
+test-web-socket: node_modules
 	@echo "Open localhost:8082/example.html in your browser"
 	@(cd examples/web-socket && node relay.js &)
 	@(cd examples/web-socket && node_modules/.bin/static -p 8082)
 
-.PHONY: clean build
+.PHONY: clean test-bridge test-app-chan-go test-web-socket \
+				deploy-app-engine-go deploy-app-engine-py
